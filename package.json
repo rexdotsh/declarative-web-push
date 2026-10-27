@@ -43,11 +43,15 @@
     "./worker": {
       "types": "./dist/worker/index.d.ts",
       "default": "./dist/worker/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
     }
   },
   "scripts": {
     "build": "bun scripts/build.ts",
-    "check": "tsc -p . && tsc -p src",
+    "check": "tsc -p . && tsc -p src && tsc -p src/client",
     "lint": "oxlint --type-aware --deny-warnings",
     "knip": "knip",
     "fmt": "oxfmt",
