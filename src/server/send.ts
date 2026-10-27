@@ -53,15 +53,24 @@ function pushHeaders({ ttl, urgency, topic }: SendOptions): Record<string, strin
   };
 }
 
+const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 async function post(endpoint: string, init: RequestInit): Promise<SendResult> {
+  let response: Response;
   try {
-    const response = await fetch(endpoint, init);
-    const outcome = pushOutcome(response.status);
-    const detail = outcome === 'sent' ? '' : (await response.text()).slice(0, DETAIL_CHARS);
-    return { status: response.status, outcome, detail };
+    response = await fetch(endpoint, init);
   } catch (error) {
-    return { status: 0, outcome: 'retry', detail: error instanceof Error ? error.message : String(error) };
+    return { status: 0, outcome: 'retry', detail: describe(error) };
   }
+  const { status } = response;
+  const outcome = pushOutcome(status);
+  if (outcome === 'sent') return { status, outcome, detail: '' };
+  // The explanation is only for people; a body cut off mid-read must not hide what the status already says.
+  const detail = await response.text().then(
+    (text) => text.slice(0, DETAIL_CHARS),
+    (error: unknown) => `(the response body could not be read: ${describe(error)})`,
+  );
+  return { status, outcome, detail };
 }
 
 /** Encrypts and sends one message. Throws only for mistakes in the call: an unknown push service, a bad option, an oversized payload. */

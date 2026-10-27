@@ -34,6 +34,10 @@ test('send never contacts endpoints outside the allowlist', async () => {
   fetchSpy.mockRestore();
 });
 
+function broken() {
+  return new ReadableStream({ start: (controller) => controller.error(new Error('connection reset')) });
+}
+
 const answers: [string, Response | Error, SendResult][] = [
   ['an accepted message', new Response(null, { status: 201 }), { status: 201, outcome: 'sent', detail: '' }],
   [
@@ -52,6 +56,16 @@ const answers: [string, Response | Error, SendResult][] = [
     { status: 403, outcome: 'rejected', detail: 'BadJwtToken' },
   ],
   ['no answer', new TypeError('network down'), { status: 0, outcome: 'retry', detail: 'network down' }],
+  [
+    'an expired subscription whose body breaks off',
+    new Response(broken(), { status: 410 }),
+    { status: 410, outcome: 'gone', detail: '(the response body could not be read: connection reset)' },
+  ],
+  [
+    'a refusal whose body breaks off',
+    new Response(broken(), { status: 400 }),
+    { status: 400, outcome: 'rejected', detail: '(the response body could not be read: connection reset)' },
+  ],
 ];
 
 test.each(answers)('send reports %s as a result, never by throwing', async (_, answer, expected) => {
