@@ -91,7 +91,7 @@ self.addEventListener('notificationclick', (event) => {
 ```
 
 - `readPush` returns `declarative` (Safari: `event.data` is null and the notification it built carries your `data`) or `imperative` (any other browser: the message to show), with `data` checked by your guard, or `null` when the push is not one of yours.
-- `showUnlessOnScreen` skips a message that `isShowing` finds among the notifications with its tag, so a resend does not alert twice. It leaves `navigate` out: a browser that honours it navigates on a tap instead of firing `notificationclick`. `options` can add it back and add what a declarative message cannot carry, such as action buttons.
+- `showUnlessOnScreen` skips a message that `isShowing` finds among the notifications with the tag it would be shown with, so a resend does not alert twice. Calls in the same context take turns per tag, so two at once still show it once. The page and the service worker are separate contexts: if both can show the same message, keeping them from doing so at the same moment is yours to do (a claim in IndexedDB, say). It leaves `navigate` out: a browser that honours it navigates on a tap instead of firing `notificationclick`. `options` can add it back and add what a declarative message cannot carry, such as action buttons.
 - `closeNotifications(registration, (tag) => …)` closes the notifications whose tag you pick. On iOS that is the only way to recognise them, since `getNotifications()` drops a declarative notification's `data`.
 - `waitUntilWithin` bounds extra work. iOS holds a declarative notification until the push event settles, so an unbounded sync or receipt would delay it.
 
