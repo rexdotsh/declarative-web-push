@@ -4,7 +4,9 @@ import { encrypt } from './encrypt.js';
 import { isPushServiceEndpoint } from './services.js';
 import { vapidAuthorization, type Vapid } from './vapid.js';
 
-export type Urgency = 'very-low' | 'low' | 'normal' | 'high';
+const URGENCIES = ['very-low', 'low', 'normal', 'high'] as const;
+
+export type Urgency = (typeof URGENCIES)[number];
 
 export interface SendOptions {
   /** Seconds the push service keeps the message for a device that is offline. 0 delivers now or never. */
@@ -42,6 +44,9 @@ export function pushOutcome(status: number): Outcome {
 
 function pushHeaders({ ttl, urgency, topic }: SendOptions): Record<string, string> {
   if (!Number.isSafeInteger(ttl) || ttl < 0) throw new RangeError('ttl is a whole number of seconds');
+  if (urgency !== undefined && !URGENCIES.includes(urgency)) {
+    throw new RangeError(`urgency is one of ${URGENCIES.join(', ')}`);
+  }
   if (topic !== undefined && !/^[\w-]{1,32}$/.test(topic))
     throw new RangeError('a topic is 1 to 32 base64url characters');
   return {

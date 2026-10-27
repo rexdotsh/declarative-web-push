@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
+import { afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { send, type SendResult } from '../src/server/send.js';
 import { canReplace, isPushServiceEndpoint } from '../src/server/services.js';
 import { generateVapidKeys, vapidKeys } from '../src/server/vapid.js';
@@ -22,16 +22,28 @@ test.each([
   expect(canReplace(endpoint)).toBe(replaces);
 });
 
-test('send never contacts endpoints outside the allowlist', async () => {
+afterEach(() => mock.restore());
+
+const PUSH_SERVICE = 'https://fcm.googleapis.com/fcm/send/abc';
+const mistakes: [string, string, unknown][] = [
+  ['an endpoint outside the allowlist', 'https://attacker.example/collect', { ttl: 60 }],
+  ['an unknown urgency', PUSH_SERVICE, { ttl: 60, urgency: 'urgent' }],
+  ['a negative ttl', PUSH_SERVICE, { ttl: -1 }],
+  ['a fractional ttl', PUSH_SERVICE, { ttl: 1.5 }],
+  ['a topic past 32 characters', PUSH_SERVICE, { ttl: 60, topic: 'x'.repeat(33) }],
+  ['a topic outside base64url', PUSH_SERVICE, { ttl: 60, topic: 'a b' }],
+];
+
+test.each(mistakes)('send throws for %s without contacting anyone', async (_, endpoint, options) => {
   const fetchSpy = spyOn(globalThis, 'fetch');
   const vapid = { keys: vapidKeys(await generateVapidKeys()), subject: 'https://example.com' };
-  const subscription = { ...newReceiver().target, endpoint: 'https://attacker.example/collect' };
+  const subscription = { ...newReceiver().target, endpoint };
 
-  const outcome = await send(subscription, '{}', vapid, { ttl: 60 }).catch((error: unknown) => error);
+  // @ts-expect-error JavaScript callers can pass anything.
+  const outcome = await send(subscription, '{}', vapid, options).catch((error: unknown) => error);
 
-  expect(outcome).toBeInstanceOf(TypeError);
+  expect(outcome).toBeInstanceOf(Error);
   expect(fetchSpy).not.toHaveBeenCalled();
-  fetchSpy.mockRestore();
 });
 
 function broken() {
@@ -76,5 +88,4 @@ test.each(answers)('send reports %s as a result, never by throwing', async (_, a
   const subscription = { ...newReceiver().target, endpoint: 'https://fcm.googleapis.com/fcm/send/abc' };
 
   expect(await send(subscription, '{}', vapid, { ttl: 60, urgency: 'high', topic: 'rent' })).toEqual(expected);
-  fetchSpy.mockRestore();
 });
