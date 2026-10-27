@@ -26,6 +26,7 @@ src/server     VAPID keys and JWTs, encryption, the push service allowlist, send
 src/worker     the service worker: readPush, showUnlessOnScreen, waitUntilWithin
 src/client     the page: subscribe, permission, clearNotifications
 src/tray.ts    closing notifications by tag, shared by worker and client
+src/validate.ts  the one message validator, shared by the builder and readPush
 src/*.ts       small helpers shared by the entries (base64url, guards)
 scripts        the build
 test           bun tests
@@ -40,7 +41,7 @@ Each folder under `src` is one subpath export, with its own tsconfig lib: `src/t
 - The library provides mechanisms; apps keep policy. What a tag means, when a notification is settled, how often to resend, where receipts go and how a subscription reaches the server all belong to the app.
 - `send` only contacts the push services in `src/server/services.ts`, and that table also says whether a service replaces by tag. Subscriptions are client input; the allowlist is a security boundary.
 - `send` throws only for mistakes in the call (unknown endpoint, bad option, oversized payload). Everything the push service or network does is a `SendResult`.
-- Messages are validated once: `declarativeMessage` when building, `readPush` when receiving. Nothing downstream re-checks.
+- Messages are validated by one table, `src/validate.ts`, which `declarativeMessage` runs when building and `readPush` when receiving, so the builder never makes what the reader drops. Nothing downstream re-checks.
 - `mutable` and `app_badge` sit beside `notification`, where WebKit reads them.
 - iOS rules are encoded where they apply and documented in `docs/findings`: `close()` is ignored for 30 s (so `clearNotifications` tries again at 31 s), declarative notifications lose `data` in `getNotifications()` (so clearing goes by tag), and a declarative notification waits for its push event (so `waitUntilWithin` bounds the work).
 - Every export is part of the published API. Adding one is a minor version, changing one a major.
