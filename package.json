@@ -1,0 +1,62 @@
+{
+  "name": "declarative-web-push",
+  "version": "0.1.0",
+  "description": "Web Push for PWAs that actually works on iOS: declarative payloads, delivery receipts, clearing notifications, zero dependencies, runs on Cloudflare Workers.",
+  "keywords": [
+    "aes128gcm",
+    "cloudflare workers",
+    "declarative web push",
+    "ios",
+    "notifications",
+    "push notifications",
+    "pwa",
+    "receipts",
+    "rfc8291",
+    "safari",
+    "service worker",
+    "vapid",
+    "web push",
+    "web-push"
+  ],
+  "homepage": "https://github.com/rexdotsh/declarative-web-push#readme",
+  "bugs": "https://github.com/rexdotsh/declarative-web-push/issues",
+  "license": "MIT",
+  "author": "rexdotsh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rexdotsh/declarative-web-push.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "check": "tsc -p . && tsc -p src",
+    "lint": "oxlint --type-aware --deny-warnings",
+    "knip": "knip",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "test": "bun test",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.3",
+    "knip": "^6.41.0",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "oxlint-tsgolint": "^7.0.2004",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.1"
+  },
+  "packageManager": "bun@1.4.4"
+}
