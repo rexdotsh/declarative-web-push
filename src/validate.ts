@@ -18,6 +18,10 @@ function isAbsoluteUrl(value: unknown): boolean {
   }
 }
 
+// Array.from turns holes into undefined, which every() would otherwise skip and JSON.stringify writes as null.
+const isListOf = (valid: (item: unknown) => boolean) => (value: unknown) =>
+  Array.isArray(value) && Array.from(value).every(valid);
+
 function isAction(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -40,12 +44,12 @@ const MEMBERS: { [Key in Exclude<keyof DeclarativeNotification, 'data'>]-?: (val
   image: isAbsoluteUrl,
   icon: isAbsoluteUrl,
   badge: isAbsoluteUrl,
-  vibrate: (value) => Array.isArray(value) && value.every(isUnsigned(UINT32_MAX)),
+  vibrate: isListOf(isUnsigned(UINT32_MAX)),
   timestamp: isUnsigned(Number.MAX_SAFE_INTEGER),
   renotify: isBoolean,
   silent: isBoolean,
   requireInteraction: isBoolean,
-  actions: (value) => Array.isArray(value) && value.every(isAction),
+  actions: isListOf(isAction),
 };
 
 const REQUIRED = new Set(['title', 'navigate']);

@@ -31,6 +31,13 @@ const all = {
   actions: [{ action: 'done', title: 'Done', navigate: 'https://app.example/done', icon: 'https://app.example/d.png' }],
 };
 
+// A list of the given length with nothing in it, as `new Array(n)` makes.
+function holes<T>(length: number): T[] {
+  const list: T[] = [];
+  list.length = length;
+  return list;
+}
+
 const cases: [string, Record<string, unknown>, number | undefined, boolean][] = [
   ['the required members', valid, undefined, true],
   ['every member', all, 7, true],
@@ -61,30 +68,33 @@ const cases: [string, Record<string, unknown>, number | undefined, boolean][] = 
     undefined,
     false,
   ],
+  ['a vibration list with a hole', { ...valid, vibrate: holes<number>(1) }, undefined, false],
+  ['a vibration list with undefined', { ...valid, vibrate: [100, undefined] }, undefined, false],
+  ['an action list with a hole', { ...valid, actions: holes<object>(1) }, undefined, false],
   ['a negative badge', valid, -1, false],
   ['a fractional badge', valid, 1.5, false],
   ['a badge past 2^53', valid, 2 ** 53, false],
 ];
 
-// The builder and the reader share one validator: whatever one refuses, the other refuses too.
-test.each(cases)('builds and reads back a notification with %s: %p', (_, notification, appBadge, accepted) => {
-  const fromJs: unknown = JSON.parse(JSON.stringify(notification));
+// The builder and the reader share one validator: what the builder makes survives JSON and reads back the same, and
+// what it refuses, the reader refuses too.
+test.each(cases)('builds, sends and reads a notification with %s: %p', (_, notification, appBadge, accepted) => {
   let built: unknown;
   try {
     // @ts-expect-error JavaScript callers can pass anything.
-    built = declarativeMessage(fromJs, { mutable: true, appBadge });
+    built = declarativeMessage(notification, { mutable: true, appBadge });
   } catch (error) {
     built = error;
   }
-  const sent = {
+  const refused = {
     web_push: 8030,
     mutable: true,
     notification,
     app_badge: appBadge === undefined ? undefined : String(appBadge),
   };
-  const read = readPush({ data: { json: () => JSON.parse(JSON.stringify(sent)) } }, anyData);
+  const wire = JSON.stringify(built instanceof TypeError ? refused : built);
+  const read = readPush({ data: { json: () => JSON.parse(wire) } }, anyData);
 
   expect(built instanceof TypeError).toBe(!accepted);
-  expect(read === null).toBe(!accepted);
-  if (accepted) expect(read).toEqual({ kind: 'imperative', message: JSON.parse(JSON.stringify(built)) });
+  expect(read).toEqual(accepted ? { kind: 'imperative', message: JSON.parse(wire) } : null);
 });
