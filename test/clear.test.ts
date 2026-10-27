@@ -44,3 +44,15 @@ test('cancelling clears nothing more once the state it decided on is gone', asyn
   await flush();
   expect([...tray.open]).toEqual(['done']);
 });
+
+test('cancelling while the notifications are still being listed closes none of them', async () => {
+  const listing = Promise.withResolvers<OnScreen[]>();
+  let closed = 0;
+  const tray = { getNotifications: () => listing.promise };
+  const cancel = clearNotifications(tray, () => true);
+  await flush();
+  cancel();
+  listing.resolve([{ title: 'done', tag: 'done', data: null, close: () => void closed++ }]);
+  await flush();
+  expect(closed).toBe(0);
+});
