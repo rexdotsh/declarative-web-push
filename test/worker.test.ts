@@ -79,6 +79,19 @@ test.each([
   expect(tray.shown.map(({ options }) => options.tag)).toEqual(['shown']);
 });
 
+test('a listing still pending on one registration does not hold up the same tag on another', async () => {
+  const listing = Promise.withResolvers<OnScreen[]>();
+  const slow = { ...registration([]), getNotifications: () => listing.promise };
+  const fast = registration([]);
+  const options = { isShowing: isShowing(1), options: { tag: 'shown', data: { fire: 1 } } };
+
+  const waiting = showUnlessOnScreen(slow, notification, options);
+  expect(await showUnlessOnScreen(fast, notification, options)).toBe(true);
+
+  listing.resolve([]);
+  expect(await waiting).toBe(true);
+});
+
 test('the receipt deadline lets the push event settle while the work is still running', async () => {
   jest.useFakeTimers();
   let settled = false;

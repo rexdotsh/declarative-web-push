@@ -72,24 +72,26 @@ export interface Shower extends Tray {
   showNotification(title: string, options: ShowOptions): Promise<void>;
 }
 
-const checking = new Map<string, Promise<unknown>>();
+const checking = new WeakMap<Tray, Map<string, Promise<unknown>>>();
 
-function oneAtATime<T>(tag: string, run: () => Promise<T>): Promise<T> {
-  const turn = (checking.get(tag) ?? Promise.resolve()).then(run, run);
+function oneAtATime<T>(registration: Tray, tag: string, run: () => Promise<T>): Promise<T> {
+  const queue = checking.get(registration) ?? new Map<string, Promise<unknown>>();
+  checking.set(registration, queue);
+  const turn = (queue.get(tag) ?? Promise.resolve()).then(run, run);
   const settled = turn.then(
     () => undefined,
     () => undefined,
   );
-  checking.set(tag, settled);
+  queue.set(tag, settled);
   return turn.finally(() => {
-    if (checking.get(tag) === settled) checking.delete(tag);
+    if (queue.get(tag) === settled) queue.delete(tag);
   });
 }
 
 /**
  * Shows a message the browser did not show itself, unless `isShowing` recognises it among the notifications with the
  * tag it would be shown with: a resend of a message already on screen must not alert again. Calls in this context
- * take turns per tag, so two at once cannot both find nothing and both show; the page and the service worker are
+ * take turns per registration and tag, so two at once cannot both find nothing and both show; the page and the service worker are
  * separate contexts, so keeping them from showing the same message at the same moment is up to the caller.
  *
  * `navigate` is left out, since a browser that honours it navigates on a tap instead of firing `notificationclick`
@@ -104,7 +106,7 @@ export function showUnlessOnScreen<Data>(
   const buttons = actions?.map(({ action, title: label, icon }) => ({ action, title: label, icon }));
   const shown: ShowOptions = { ...rest, actions: buttons, ...options };
   const tag = shown.tag ?? '';
-  return oneAtATime(tag, async () => {
+  return oneAtATime(registration, tag, async () => {
     const current = await registration.getNotifications({ tag });
     if (current.some(isShowing)) return false;
     await registration.showNotification(title, shown);
