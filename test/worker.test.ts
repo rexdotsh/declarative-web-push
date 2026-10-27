@@ -36,18 +36,6 @@ test.each([
     { data: payload({ ...message, notification: { ...notification, data: 7 } }) },
     null,
   ],
-  ['another web_push version', { data: payload({ ...message, web_push: 8031 }) }, null],
-  [
-    'a notification without navigate',
-    { data: payload({ ...message, notification: { ...notification, navigate: undefined } }) },
-    null,
-  ],
-  [
-    'a mistyped optional member',
-    { data: payload({ ...message, notification: { ...notification, renotify: 'yes' } }) },
-    null,
-  ],
-  ['a badge that is not digits', { data: payload({ ...message, app_badge: '-1' }) }, null],
 ] as const)('reads %s', (_, event, expected) => {
   expect(readPush(event, isData)).toEqual(expected);
 });

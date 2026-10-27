@@ -1,54 +1,15 @@
-import type { DeclarativeAction, DeclarativeMessage, DeclarativeNotification } from '../index.js';
-import { isRecord, isUnsigned } from '../guards.js';
+import type { DeclarativeMessage, DeclarativeNotification } from '../index.js';
 import type { OnScreen, Tray } from '../tray.js';
+import { isMessage } from '../validate.js';
 
 export { closeNotifications, type OnScreen, type Tray } from '../tray.js';
-
-const isString = (value: unknown) => typeof value === 'string';
-const isBoolean = (value: unknown) => typeof value === 'boolean';
-
-function isAction(value: unknown): value is DeclarativeAction {
-  return (
-    isRecord(value) &&
-    [value.action, value.title, value.navigate].every(isString) &&
-    (value.icon === undefined || isString(value.icon))
-  );
-}
-
-const OPTIONAL: Record<
-  Exclude<keyof DeclarativeNotification, 'title' | 'navigate' | 'data'>,
-  (value: unknown) => boolean
-> = {
-  dir: (value) => value === 'auto' || value === 'ltr' || value === 'rtl',
-  lang: isString,
-  body: isString,
-  tag: isString,
-  image: isString,
-  icon: isString,
-  badge: isString,
-  vibrate: (value) => Array.isArray(value) && value.every(isUnsigned),
-  timestamp: isUnsigned,
-  renotify: isBoolean,
-  silent: isBoolean,
-  requireInteraction: isBoolean,
-  actions: (value) => Array.isArray(value) && value.every(isAction),
-};
 
 /** Whether a decoded push payload is a declarative message whose `data` passes `isData`. */
 export function isDeclarativeMessage<Data>(
   value: unknown,
   isData: (data: unknown) => data is Data,
 ): value is DeclarativeMessage<DeclarativeNotification<Data> & { data: Data }> {
-  if (!isRecord(value) || value.web_push !== 8030 || !isRecord(value.notification)) return false;
-  const { notification } = value;
-  return (
-    isString(notification.title) &&
-    isString(notification.navigate) &&
-    isData(notification.data) &&
-    Object.entries(OPTIONAL).every(([key, valid]) => notification[key] === undefined || valid(notification[key])) &&
-    (value.mutable === undefined || isBoolean(value.mutable)) &&
-    (value.app_badge === undefined || (isString(value.app_badge) && /^\d+$/.test(value.app_badge)))
-  );
+  return isMessage(value) && isData(value.notification.data);
 }
 
 /** The parts of a `PushEvent` this reads; `notification` is Safari's, for declarative messages. */

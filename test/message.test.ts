@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import { declarativeMessage, type DeclarativeNotification, type MessageOptions } from '../src/index.js';
+import { declarativeMessage } from '../src/index.js';
+import { readPush } from '../src/worker/index.js';
 
 const valid = { title: 'Pay rent', navigate: 'https://app.example/?open=1', tag: 'rent', data: { id: 'rent' } };
 
@@ -13,17 +14,77 @@ test('a declarative message carries the badge and mutable flag where WebKit read
   expect(declarativeMessage(valid, { mutable: false })).toEqual({ web_push: 8030, notification: valid });
 });
 
-const unbuildable: [string, DeclarativeNotification, Partial<MessageOptions>][] = [
-  ['an empty title', { ...valid, title: '' }, {}],
-  ['a relative navigate', { ...valid, navigate: '/?open=1' }, {}],
-  ['a relative icon', { ...valid, icon: '/icon.png' }, {}],
-  ['an action with a relative navigate', { ...valid, actions: [{ action: 'a', title: 'A', navigate: '/a' }] }, {}],
-  ['renotify without a tag', { ...valid, tag: undefined, renotify: true }, {}],
-  ['vibrate on a silent notification', { ...valid, silent: true, vibrate: [100] }, {}],
-  ['a fractional badge', valid, { appBadge: 1.5 }],
-  ['a negative badge', valid, { appBadge: -1 }],
+const anyData = (data: unknown): data is unknown => data !== null;
+const all = {
+  ...valid,
+  dir: 'rtl',
+  lang: 'en',
+  body: 'Due 9:00',
+  image: 'https://app.example/i.png',
+  icon: 'https://app.example/icon.png',
+  badge: 'https://app.example/badge.png',
+  vibrate: [0, 2 ** 32 - 1],
+  timestamp: Number.MAX_SAFE_INTEGER,
+  renotify: true,
+  silent: false,
+  requireInteraction: true,
+  actions: [{ action: 'done', title: 'Done', navigate: 'https://app.example/done', icon: 'https://app.example/d.png' }],
+};
+
+const cases: [string, Record<string, unknown>, number | undefined, boolean][] = [
+  ['the required members', valid, undefined, true],
+  ['every member', all, 7, true],
+  ['no title', { ...valid, title: undefined }, undefined, false],
+  ['an empty title', { ...valid, title: '' }, undefined, false],
+  ['no navigate', { ...valid, navigate: undefined }, undefined, false],
+  ['a relative navigate', { ...valid, navigate: '/?open=1' }, undefined, false],
+  ['a relative icon', { ...valid, icon: '/icon.png' }, undefined, false],
+  ['a bad dir', { ...valid, dir: 'up' }, undefined, false],
+  ['a mistyped boolean', { ...valid, renotify: 'yes' }, undefined, false],
+  ['a negative timestamp', { ...valid, timestamp: -1 }, undefined, false],
+  ['a fractional timestamp', { ...valid, timestamp: 1.5 }, undefined, false],
+  ['a timestamp past 2^53', { ...valid, timestamp: 2 ** 53 }, undefined, false],
+  ['a negative vibration', { ...valid, vibrate: [-1] }, undefined, false],
+  ['a vibration past 32 bits', { ...valid, vibrate: [2 ** 32] }, undefined, false],
+  ['vibrate that is not a list', { ...valid, vibrate: 100 }, undefined, false],
+  ['renotify without a tag', { ...valid, tag: undefined, renotify: true }, undefined, false],
+  ['vibrate on a silent notification', { ...valid, silent: true, vibrate: [100] }, undefined, false],
+  [
+    'an action without a title',
+    { ...valid, actions: [{ action: 'a', navigate: 'https://a.example' }] },
+    undefined,
+    false,
+  ],
+  [
+    'an action with a relative navigate',
+    { ...valid, actions: [{ action: 'a', title: 'A', navigate: '/a' }] },
+    undefined,
+    false,
+  ],
+  ['a negative badge', valid, -1, false],
+  ['a fractional badge', valid, 1.5, false],
+  ['a badge past 2^53', valid, 2 ** 53, false],
 ];
 
-test.each(unbuildable)('refuses to build a message with %s', (_, notification, options) => {
-  expect(() => declarativeMessage(notification, { mutable: true, ...options })).toThrow();
+// The builder and the reader share one validator: whatever one refuses, the other refuses too.
+test.each(cases)('builds and reads back a notification with %s: %p', (_, notification, appBadge, accepted) => {
+  const fromJs: unknown = JSON.parse(JSON.stringify(notification));
+  let built: unknown;
+  try {
+    // @ts-expect-error JavaScript callers can pass anything.
+    built = declarativeMessage(fromJs, { mutable: true, appBadge });
+  } catch (error) {
+    built = error;
+  }
+  const sent = {
+    web_push: 8030,
+    mutable: true,
+    notification,
+    app_badge: appBadge === undefined ? undefined : String(appBadge),
+  };
+  const read = readPush({ data: { json: () => JSON.parse(JSON.stringify(sent)) } }, anyData);
+
+  expect(built instanceof TypeError).toBe(!accepted);
+  expect(read === null).toBe(!accepted);
+  if (accepted) expect(read).toEqual({ kind: 'imperative', message: JSON.parse(JSON.stringify(built)) });
 });

@@ -1,4 +1,4 @@
-import { isUnsigned } from './guards.js';
+import { messageProblem } from './validate.js';
 
 /** A browser's push subscription, as `PushSubscription.toJSON()` reports it: what the client sends the server. */
 export interface PushSubscriptionKeys {
@@ -57,35 +57,22 @@ export interface MessageOptions {
   appBadge?: number;
 }
 
-// URL.canParse is missing from Safari before 17, and pages build messages too.
-function isAbsoluteUrl(value: string | undefined): boolean {
-  if (value === undefined) return true;
-  try {
-    return Boolean(new URL(value));
-  } catch {
-    return false;
-  }
-}
-
 /**
- * A declarative push message, checked for what browsers would otherwise drop silently or throw on when showing it:
- * an empty title, relative URLs, `renotify` without a tag, `vibrate` on a silent notification.
+ * A declarative push message, checked the way `readPush` checks what arrives, so it never builds what it would
+ * drop: required members, their types and ranges, absolute URLs, and what browsers throw on when showing it
+ * (`renotify` without a tag, `vibrate` on a silent notification). Throws a TypeError naming the problem.
  */
 export function declarativeMessage<Notification extends DeclarativeNotification>(
   notification: Notification,
   { mutable, appBadge }: MessageOptions,
 ): DeclarativeMessage<Notification> {
-  const { title, navigate, icon, image, badge, tag, renotify, silent, vibrate, actions = [] } = notification;
-  if (title === '') throw new TypeError('a declarative notification needs a title');
-  const urls = [navigate, icon, image, badge, ...actions.flatMap((action) => [action.navigate, action.icon])];
-  if (!urls.every(isAbsoluteUrl)) throw new TypeError('declarative notification URLs must be absolute');
-  if (renotify && !tag) throw new TypeError('renotify needs a tag');
-  if (silent && vibrate) throw new TypeError('a silent notification cannot vibrate');
-  if (appBadge !== undefined && !isUnsigned(appBadge)) throw new RangeError('the app badge is a whole number');
-  return {
+  const message: DeclarativeMessage<Notification> = {
     web_push: 8030,
     notification,
     ...(mutable && { mutable }),
     ...(appBadge !== undefined && { app_badge: String(appBadge) }),
   };
+  const problem = messageProblem(message);
+  if (problem) throw new TypeError(problem);
+  return message;
 }
