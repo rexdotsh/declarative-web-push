@@ -73,8 +73,8 @@ export interface Shower extends Tray {
 }
 
 /**
- * Shows a message the browser did not show itself, unless `isShowing` recognises it among the notifications with
- * its tag: a resend of a message already on screen must not alert again.
+ * Shows a message the browser did not show itself, unless `isShowing` recognises it among the notifications with the
+ * tag it would be shown with: a resend of a message already on screen must not alert again.
  *
  * `navigate` is left out, since a browser that honours it navigates on a tap instead of firing `notificationclick`
  * (WHATWG Notifications, "activating a notification"); `options` can add it back, and overrides any other member.
@@ -84,11 +84,13 @@ export async function showUnlessOnScreen<Data>(
   notification: DeclarativeNotification<Data>,
   { isShowing, options }: { isShowing: (shown: OnScreen) => boolean; options?: ShowOptions },
 ): Promise<boolean> {
-  const current = await registration.getNotifications({ tag: notification.tag });
-  if (current.some(isShowing)) return false;
   const { title, navigate: _navigate, actions, ...rest } = notification;
   const buttons = actions?.map(({ action, title: label, icon }) => ({ action, title: label, icon }));
-  await registration.showNotification(title, { ...rest, actions: buttons, ...options });
+  const shown: ShowOptions = { ...rest, actions: buttons, ...options };
+  const tag = shown.tag ?? '';
+  const current = await registration.getNotifications({ tag });
+  if (current.some(isShowing)) return false;
+  await registration.showNotification(title, shown);
   return true;
 }
 

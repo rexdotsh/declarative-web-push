@@ -45,7 +45,10 @@ function registration(showing: OnScreen[]) {
   return {
     shown,
     getNotifications: async (filter?: { tag?: string }) => showing.filter((n) => !filter?.tag || n.tag === filter.tag),
-    showNotification: async (title: string, options: ShowOptions) => void shown.push({ title, options }),
+    showNotification: async (title: string, options: ShowOptions) => {
+      shown.push({ title, options });
+      showing.push(onScreen(options.tag ?? '', options.data));
+    },
   };
 }
 
@@ -61,6 +64,20 @@ test('a resend already on screen is not shown, and alerts, a second time', async
   );
   expect(tray.shown).toEqual([{ title: 'Pay rent', options: { tag: 'rent', data: { id: 'rent' }, icon: '/i.png' } }]);
 });
+
+test.each([['one after the other, shown with another tag', false]])(
+  'the same message shown twice, %s, appears once',
+  async (_, concurrent) => {
+    const tray = registration([]);
+    const show = () =>
+      showUnlessOnScreen(tray, notification, { isShowing: isShowing(1), options: { tag: 'shown', data: { fire: 1 } } });
+
+    const results = concurrent ? await Promise.all([show(), show()]) : [await show(), await show()];
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(tray.shown.map(({ options }) => options.tag)).toEqual(['shown']);
+  },
+);
 
 test('the receipt deadline lets the push event settle while the work is still running', async () => {
   jest.useFakeTimers();
